@@ -26,6 +26,16 @@ namespace MovieMake
         public MainWindow()
         {
             InitializeComponent();
+            // Window does not have DataContext in WinUI 3, so we set it on the root element.
+            RootGrid.DataContext = new MovieMake.ViewModels.MainViewModel();
+        }
+
+        private void ApiPasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
+        {
+            if (RootGrid.DataContext is MovieMake.ViewModels.MainViewModel vm)
+            {
+                vm.ApiKey = ((PasswordBox)sender).Password;
+            }
         }
     }
 }

@@ -41,10 +41,17 @@ namespace MovieMake
         /// Invoked when the application is launched.
         /// </summary>
         /// <param name="args">Details about the launch request and process.</param>
+        public static MovieMake.Services.PythonService PythonService { get; private set; } = new MovieMake.Services.PythonService();
+
         protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
         {
             _window = new MainWindow();
             _window.Activate();
+
+            // Handle exit to kill python process
+            _window.Closed += (sender, args) => {
+                PythonService.Dispose();
+            };
         }
     }
 }
