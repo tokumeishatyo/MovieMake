@@ -1,7 +1,9 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Net;
 using System.Net.Http;
+using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -12,41 +14,60 @@ namespace MovieMake.Services
     {
         private Process? _pythonProcess;
         private readonly HttpClient _httpClient;
-        private const string BaseUrl = "http://127.0.0.1:8000";
         private string? _apiKey; // In-memory API key
+        private int _port;
+
         public bool IsRunning => _pythonProcess != null && !_pythonProcess.HasExited;
 
         public PythonService()
         {
             _httpClient = new HttpClient();
-            _httpClient.BaseAddress = new Uri(BaseUrl);
         }
 
         public async Task StartBackendAsync()
         {
             if (IsRunning) return;
 
-            string pythonScript = Path.GetFullPath("backend/main.py");
+            // Find free port
+            _port = GetFreeTcpPort();
+            string baseUrl = $"http://127.0.0.1:{_port}";
+            _httpClient.BaseAddress = new Uri(baseUrl);
+
+            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            string backendDir = Path.Combine(baseDir, "backend");
+            string pythonScript = Path.Combine(backendDir, "main.py");
             
+            if (!File.Exists(pythonScript))
+            {
+                throw new FileNotFoundException($"Backend script not found at: {pythonScript}");
+            }
+
             var psi = new ProcessStartInfo
             {
-                FileName = "python", // Standard on Windows
-                Arguments = $"-u \"{pythonScript}\"", // -u for unbuffered stdout
+                FileName = "python", 
+                Arguments = $"-u \"{pythonScript}\"", 
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 CreateNoWindow = true,
-                WorkingDirectory = Path.GetFullPath(".") 
+                WorkingDirectory = backendDir
             };
+            
+            // Pass PORT to python
+            psi.EnvironmentVariables["PORT"] = _port.ToString();
 
             try 
             {
                 _pythonProcess = Process.Start(psi);
                 if (_pythonProcess == null) throw new Exception("Failed to start python process.");
                 
-                // Monitor output for debugging
-                _pythonProcess.OutputDataReceived += (s, e) => Debug.WriteLine($"[Python] {e.Data}");
-                _pythonProcess.ErrorDataReceived += (s, e) => Debug.WriteLine($"[Python ERR] {e.Data}");
+                // Monitor output
+                _pythonProcess.OutputDataReceived += (s, e) => {
+                    if (!string.IsNullOrEmpty(e.Data)) Debug.WriteLine($"[Python] {e.Data}");
+                };
+                _pythonProcess.ErrorDataReceived += (s, e) => {
+                    if (!string.IsNullOrEmpty(e.Data)) Debug.WriteLine($"[Python ERR] {e.Data}");
+                };
                 _pythonProcess.BeginOutputReadLine();
                 _pythonProcess.BeginErrorReadLine();
 
@@ -55,14 +76,29 @@ namespace MovieMake.Services
             catch (Exception ex)
             {
                 Debug.WriteLine($"Error starting python: {ex.Message}");
+                StopBackend();
                 throw;
             }
+        }
+
+        private int GetFreeTcpPort()
+        {
+            TcpListener l = new TcpListener(IPAddress.Loopback, 0);
+            l.Start();
+            int port = ((IPEndPoint)l.LocalEndpoint).Port;
+            l.Stop();
+            return port;
         }
 
         private async Task WaitForHealthAsync(int maxRetries = 10)
         {
             for (int i = 0; i < maxRetries; i++)
             {
+                if (_pythonProcess != null && _pythonProcess.HasExited)
+                {
+                     throw new Exception($"Python process exited prematurely with code {_pythonProcess.ExitCode}. check debug output.");
+                }
+
                 try
                 {
                     var response = await _httpClient.GetAsync("/health");
@@ -70,7 +106,7 @@ namespace MovieMake.Services
                 }
                 catch
                 {
-                    // Ignore connection errors while starting
+                    // Ignore
                 }
                 await Task.Delay(500);
             }
@@ -79,7 +115,7 @@ namespace MovieMake.Services
 
         public async Task SetApiKeyAsync(string apiKey)
         {
-            _apiKey = apiKey; // Keep in memory
+            _apiKey = apiKey; 
             
             var payload = new { api_key = apiKey };
             var json = JsonSerializer.Serialize(payload);

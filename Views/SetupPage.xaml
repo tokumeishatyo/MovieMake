@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="MovieMake.Views.SetupPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:MovieMake.Views"
+    xmlns:converters="using:MovieMake.Converters"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <Page.Resources>
+        <converters:BooleanToVisibilityConverter x:Key="BoolToVisConverter" />
+        <converters:BoolNegationConverter x:Key="BoolNegationConverter" />
+    </Page.Resources>
+
+    <Grid>
+        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="20" MaxWidth="400">
+            <TextBlock Text="MovieMake Setup" Style="{StaticResource SubtitleTextBlockStyle}" HorizontalAlignment="Center"/>
+
+            <StackPanel Spacing="10">
+                <TextBlock Text="API Key:" />
+                <PasswordBox x:Name="ApiPasswordBox" 
+                             PlaceholderText="Enter API Key" 
+                             PasswordChanged="ApiPasswordBox_PasswordChanged"/>
+            </StackPanel>
+
+            <Button Command="{Binding ConnectCommand}" 
+                    Content="Connect to Backend" 
+                    HorizontalAlignment="Stretch"
+                    IsEnabled="{Binding IsBusy, Converter={StaticResource BoolNegationConverter}}"/>
+
+            <ProgressRing IsActive="{Binding IsBusy}" 
+                          Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisConverter}}" />
+
+            <TextBlock Text="{Binding StatusMessage}" 
+                       Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" 
+                       HorizontalAlignment="Center" 
+                       TextWrapping="Wrap"/>
+        </StackPanel>
+    </Grid>
+</Page>

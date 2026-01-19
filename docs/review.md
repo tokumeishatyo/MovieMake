@@ -1,8 +1,8 @@
-# Phase 1 コードレビュー
+# Phase 2 コードレビュー
 
 **レビュー日**: 2026-01-19
 **レビュアー**: Claude (Reviewer)
-**対象**: Phase 1 - プロジェクト基盤の確立 (Project Skeleton & IPC)
+**対象**: Phase 2 - データモデルと台本UI実装 (Core Data & UI)
 
 ---
 
@@ -11,141 +11,193 @@
 ### 変更ファイル
 | ファイル | 変更内容 |
 |----------|----------|
-| `App.xaml.cs` | PythonService追加、終了時のDispose処理 |
-| `MainWindow.xaml` | セットアップUI追加（APIキー入力、接続ボタン） |
-| `MainWindow.xaml.cs` | ViewModel連携、PasswordBox処理 |
-| `MovieMake.csproj` | CommunityToolkit.Mvvm追加、backend配置設定 |
+| `App.xaml.cs` | MainWindow を static プロパティ化、コード簡略化 |
+| `MainWindow.xaml` | Frame-based navigation 導入 |
+| `MainWindow.xaml.cs` | SetupPage への初期ナビゲーション |
+| `Services/PythonService.cs` | 動的ポート割り当て、エラーハンドリング強化 |
+| `backend/main.py` | エラーハンドリング追加、Python 3.9互換対応 |
 
 ### 新規追加ファイル
 | ファイル | 役割 |
 |----------|------|
-| `Services/PythonService.cs` | Pythonプロセス管理、API通信 |
-| `ViewModels/MainViewModel.cs` | メイン画面のViewModel |
-| `Converters/BooleanToVisibilityConverter.cs` | Bool→Visibility変換 |
-| `Converters/BoolNegationConverter.cs` | Bool反転変換 |
-| `backend/main.py` | FastAPIサーバー |
-| `backend/requirements.txt` | Python依存関係 |
-| `debug_backend.bat` | 開発用バックエンド起動スクリプト |
+| `Models/Script.cs` | 台本データモデル |
+| `Models/Line.cs` | 行データモデル |
+| `Models/Character.cs` | キャラクターデータモデル |
+| `Services/ScriptManager.cs` | 台本のJSON保存/読み込み |
+| `Services/FilePickerService.cs` | ファイルダイアログ処理 |
+| `ViewModels/SetupViewModel.cs` | セットアップ画面ViewModel（旧MainViewModel） |
+| `ViewModels/ScriptEditorViewModel.cs` | 台本編集画面ViewModel |
+| `Views/SetupPage.xaml(.cs)` | セットアップ画面 |
+| `Views/ScriptEditorPage.xaml(.cs)` | 台本編集画面 |
+
+### 削除ファイル
+| ファイル | 理由 |
+|----------|------|
+| `ViewModels/MainViewModel.cs` | SetupViewModelに置き換え |
 
 ---
 
-## 2. Phase 1 要件との整合性チェック
+## 2. Phase 2 要件との整合性チェック
 
 | 要件 | 状態 | 確認内容 |
 |------|------|----------|
-| FastAPI, Uvicorn依存関係定義 | ✅ 完了 | `requirements.txt` に定義済み |
-| Hello WorldレベルのAPI実装 | ✅ 完了 | `/health`, `/config/api-key`, `/` エンドポイント実装 |
-| MVVMパターン導入 | ✅ 完了 | CommunityToolkit.Mvvm使用、MainViewModel実装 |
-| PythonService実装 | ✅ 完了 | 起動/終了/ヘルスチェック/APIキー設定 |
-| APIキーのインメモリ保持 | ✅ 完了 | C#: `_apiKey`、Python: `_api_key` |
-| IPC通信テスト | ✅ 完了 | ヘルスチェックAPIで接続確認 |
-| WinUI終了時Python終了 | ✅ 完了 | `App.xaml.cs` でClosed時にDispose呼び出し |
+| Script データモデル定義 | ✅ 完了 | `Models/Script.cs` - Title, Characters, Lines |
+| Line データモデル定義 | ✅ 完了 | `Models/Line.cs` - Id, CharacterId, Text |
+| Character データモデル定義 | ✅ 完了 | `Models/Character.cs` - Id, Name, DefaultVoiceId, ImageBasePath |
+| テキスト入力エリア | ✅ 完了 | `ScriptEditorPage.xaml` - TextBox |
+| タイムライン(リスト)表示 | ✅ 完了 | `ScriptEditorPage.xaml` - ListView |
+| 話者設定プルダウン | ✅ 完了 | `ScriptEditorPage.xaml` - ComboBox |
+| ScriptManager (Load/Save) | ✅ 完了 | `Services/ScriptManager.cs` |
+| JSON シリアライズ | ✅ 完了 | System.Text.Json 使用 |
 
-**Phase 1 要件達成率: 100%**
+**Phase 2 要件達成率: 100%**
 
 ---
 
-## 3. セキュリティ要件チェック（最重要）
+## 3. コード品質レビュー
+
+### 3.1. データモデル (Models/)
+
+**良い点**:
+- シンプルで明確な構造
+- `Guid.NewGuid().ToString()` でユニークID生成
+- `ObservableCollection<Line>` でUI自動更新対応
+- nullable 対応 (`DefaultVoiceId?`, `ImageBasePath?`)
+
+**コード例 (Script.cs)**:
+```csharp
+public class Script
+{
+    public string Title { get; set; } = "Untitled Script";
+    public List<Character> Characters { get; set; } = new();
+    public ObservableCollection<Line> Lines { get; set; } = new();
+}
+```
+
+### 3.2. ScriptManager.cs
+
+**良い点**:
+- 非同期I/O (`async/await`)
+- `WriteIndented = true` で可読性の高いJSON出力
+- `using` で適切なリソース解放
+
+**注意点**:
+- `LoadScriptAsync` がファイル不在時に `null` を返す設計 → 呼び出し元で適切にハンドリング済み
+
+### 3.3. FilePickerService.cs
+
+**良い点**:
+- WinUI 3 の FilePicker を正しく初期化（`InitializeWithWindow`）
+- `App.MainWindow` からハンドル取得
+
+### 3.4. ScriptEditorViewModel.cs
+
+**良い点**:
+- `AddLine` / `RemoveLine` コマンドの実装
+- `SaveScriptAsync` / `LoadScriptAsync` でファイルI/O
+- エラーハンドリング（try-catch）
+- ステータスメッセージでユーザーフィードバック
+
+**注意点**:
+- `Line 27`: ダミーキャラクター追加（TODOコメントあり）→ Phase 3で対応予定、現時点では問題なし
+
+### 3.5. SetupViewModel.cs
+
+**良い点**:
+- `ConnectionSuccessful` イベントでナビゲーション通知
+- Phase 1のMainViewModelから適切にリファクタリング
+
+### 3.6. ScriptEditorPage.xaml
+
+**良い点**:
+- `ElementName=RootPage` でDataTemplate内からViewModelにバインド
+- `x:DataType="models:Line"` で型指定
+- ComboBoxの `SelectedValuePath` / `DisplayMemberPath` 設定
+
+**技術的メモ**:
+- WinUI 3 の DataTemplate 内から親の ViewModel にバインドする `ElementName` パターンは適切
+
+### 3.7. PythonService.cs の改善
+
+**良い点**:
+- **動的ポート割り当て**: `GetFreeTcpPort()` でポート競合回避
+- **ファイル存在チェック**: `File.Exists(pythonScript)` でエラー早期検出
+- **プロセス異常終了検知**: `_pythonProcess.HasExited` チェック追加
+- **環境変数でポート渡し**: `psi.EnvironmentVariables["PORT"]` で安全にポート伝達
+
+### 3.8. backend/main.py の改善
+
+**良い点**:
+- **Python 3.9 互換**: `str | None` → `Optional[str]` に変更
+- **エラーハンドリング強化**: try-catch とスタックトレース出力
+- **デバッグログ**: `log_level="debug"` で詳細ログ
+
+---
+
+## 4. アーキテクチャ改善の評価
+
+### 4.1. Frame-based Navigation 導入
+
+| 変更前 | 変更後 |
+|--------|--------|
+| MainWindow に直接UI配置 | MainWindow → Frame → Pages |
+| 単一画面 | SetupPage → ScriptEditorPage |
+
+**評価**: 画面遷移が明確になり、今後のPhaseで画面追加が容易になる良いリファクタリング
+
+### 4.2. ViewModel分離
+
+| 変更前 | 変更後 |
+|--------|--------|
+| MainViewModel (複合) | SetupViewModel + ScriptEditorViewModel |
+
+**評価**: 責務分離が明確になり、テストしやすい構造
+
+---
+
+## 5. セキュリティ要件チェック
 
 | 要件 | 状態 | 確認内容 |
 |------|------|----------|
-| APIキーのメモリ保持のみ | ✅ OK | C#/Python両方で変数保持のみ |
-| POSTリクエストで送信 | ✅ OK | `/config/api-key` にPOSTで送信 |
-| コマンドライン引数での渡し禁止 | ✅ OK | `ProcessStartInfo.Arguments` にAPIキーなし |
-| ファイル保存禁止 | ✅ OK | ファイルへの書き込みなし |
-| 環境変数保存禁止 | ✅ OK | 環境変数への設定なし |
-| ログ出力禁止 | ✅ OK | `main.py:39` の print文はAPIキー値を出力していない |
-| 接続後UIからクリア | ✅ OK | `MainViewModel.cs:73` で `ApiKey = ""` |
-
-**セキュリティ要件: 全項目クリア**
+| APIキーのメモリ保持のみ | ✅ OK | SetupViewModelで引き続き維持 |
+| ファイル保存禁止 | ✅ OK | ScriptManagerはAPIキーを保存しない |
+| 新規コードにセキュリティ問題 | ✅ OK | 問題なし |
 
 ---
 
-## 4. コード品質レビュー
+## 6. 問題点と改善提案
 
-### 4.1. PythonService.cs
-
-**良い点**:
-- `IDisposable` パターンを正しく実装
-- `GC.SuppressFinalize(this)` を適切に呼び出し
-- ヘルスチェックのリトライロジック（最大10回、500ms間隔）
-- デバッグ出力でプロセスの標準出力/エラーを監視
-
-**注意点**:
-- `Line 16`: `_apiKey` を保持しているが、現在使用箇所なし（将来のAPI呼び出し用と推測）→ 問題なし
-
-### 4.2. MainViewModel.cs
-
-**良い点**:
-- `ObservableProperty` 属性で簡潔なプロパティ定義
-- `RelayCommand` でコマンドパターン実装
-- エラーハンドリングが適切（try-catch-finally）
-- 接続成功後にAPIキーをUIからクリア（セキュリティ対策）
-
-**注意点**:
-- `Line 34`: `async void InitializeBackend()` - 例外はtry-catchで捕捉済みだが、async voidは一般的に避けるべきパターン。ただしイベントハンドラ的な用途のため許容範囲。
-
-### 4.3. backend/main.py
-
-**良い点**:
-- FastAPIの標準的な構成
-- グローバル変数 `_api_key` でインメモリ保持
-- `/health` エンドポイントで `api_key_set` 状態を返却
-- `127.0.0.1` にバインド（外部からのアクセス防止）
-
-**注意点**:
-- `Line 11-15`: CORS設定が `allow_origins=["*"]` - ローカルツールのため許容可能
-- `Line 39`: print文はAPIキー値を出力していない（OK）
-
-### 4.4. MainWindow.xaml
-
-**良い点**:
-- `PasswordBox` を使用してAPIキーをマスク表示
-- `ProgressRing` でローディング状態を表示
-- 適切なバインディング設計
-
-### 4.5. App.xaml.cs
-
-**注意点**:
-- `Line 44`: `PythonService` が `static` プロパティとして公開されている。Phase 1では許容可能だが、Phase 2以降でDependency Injection (DI) への移行を検討。
-
----
-
-## 5. 問題点と改善提案
-
-### 5.1. 軽微な問題（今後のフェーズで対応可）
+### 6.1. 軽微な問題（今後のフェーズで対応可）
 
 | # | 問題 | 影響度 | 提案 |
 |---|------|--------|------|
-| 1 | `PythonService` がstaticシングルトン | 低 | Phase 2以降でDI導入を検討 |
-| 2 | `async void InitializeBackend()` | 低 | 将来的に`IAsyncRelayCommand`等で改善可能 |
-| 3 | requirements.txtにmoviepyが含まれる | なし | Phase 4で使用予定、先行準備として問題なし |
+| 1 | ダミーキャラクターのハードコード | 低 | Phase 3でバックエンド連携時に解決予定 |
+| 2 | FilePickerServiceが毎回newされる | 低 | DIまたはシングルトン化を検討 |
 
-### 5.2. 対応不要（確認済み）
+### 6.2. 対応不要（確認済み）
 
 | 項目 | 理由 |
 |------|------|
-| CORS `allow_origins=["*"]` | ローカルツールのため許容 |
-| Python print文 | APIキー値は出力していない |
+| MainViewModel.cs 削除 | SetupViewModelに適切に置き換え |
+| Converters/ 未変更 | Phase 1で作成済み、継続使用 |
 
 ---
 
-## 6. 最終判定
+## 7. 最終判定
 
 | 項目 | 判定 |
 |------|------|
-| Phase 1 要件達成 | **完了** |
-| セキュリティ要件 | **全項目クリア** |
+| Phase 2 要件達成 | **完了** |
 | コード品質 | **良好** |
+| アーキテクチャ改善 | **適切** |
+| セキュリティ要件 | **維持** |
 | 致命的な問題 | **なし** |
 
 ## 結論
 
-**Phase 1 の実装を承認いたします。**
+**Phase 2 の実装を承認いたします。**
 
-全ての要件が適切に実装されており、特にセキュリティ要件（APIキーのインメモリ保持、コマンドライン引数での渡し禁止）が正しく実装されています。
-
-軽微な改善点は今後のフェーズで対応可能であり、Phase 2への移行に問題はありません。
+全ての要件が適切に実装されており、Frame-based navigation や動的ポート割り当てなどの追加改善も良好です。データモデルとUI、ファイルI/Oが正しく連携しており、Phase 3への移行に問題はありません。
 
 ---
 

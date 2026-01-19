@@ -2,15 +2,17 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MovieMake.Services;
 using System;
-using System.Diagnostics;
 using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
 
 namespace MovieMake.ViewModels
 {
-    public partial class MainViewModel : ObservableObject
+    public partial class SetupViewModel : ObservableObject
     {
         private readonly PythonService _pythonService;
+        
+        // Event to request navigation
+        public event EventHandler? ConnectionSuccessful;
 
         [ObservableProperty]
         private string _statusMessage = "Not Connected";
@@ -24,9 +26,8 @@ namespace MovieMake.ViewModels
         [ObservableProperty]
         private bool _isBusy = false;
 
-        public MainViewModel()
+        public SetupViewModel()
         {
-            // Accessing static singleton for Phase 1 simplicity
             _pythonService = App.PythonService;
             InitializeBackend();
         }
@@ -69,8 +70,10 @@ namespace MovieMake.ViewModels
                 {
                     StatusMessage = "Connected & Authenticated!";
                     IsConnected = true;
-                    // Clear API key from UI property for security
                     ApiKey = ""; 
+                    
+                    // Trigger navigation
+                    ConnectionSuccessful?.Invoke(this, EventArgs.Empty);
                 }
                 else
                 {
