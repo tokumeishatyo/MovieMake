@@ -1,49 +1,79 @@
 import os
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 
 class AssetManager:
-    def __init__(self, assets_dir: str = "assets"):
-        # Resolve absolute path relative to backend root or current working dir
-        # Assuming run from backend dir or root, we try to be robust
+    def __init__(self, assets_dir: str = "assets", user_data_dir: Optional[str] = None):
+        self.character_paths: Dict[str, str] = {} # Map ID to full path
+
+        # 1. Internal Assets
         if os.path.exists("backend/assets"):
-            self.assets_dir = os.path.abspath("backend/assets")
+            self.internal_assets_dir = os.path.abspath("backend/assets")
         elif os.path.exists("assets"):
-            self.assets_dir = os.path.abspath("assets")
+            self.internal_assets_dir = os.path.abspath("assets")
         else:
-            self.assets_dir = os.path.abspath("assets")
-            os.makedirs(self.assets_dir, exist_ok=True)
+             self.internal_assets_dir = os.path.abspath("assets")
+             os.makedirs(self.internal_assets_dir, exist_ok=True)
             
-        self.characters_dir = os.path.join(self.assets_dir, "characters")
-        os.makedirs(self.characters_dir, exist_ok=True)
+        self.internal_chars_dir = os.path.join(self.internal_assets_dir, "characters")
+        os.makedirs(self.internal_chars_dir, exist_ok=True)
+
+        # 2. User Data Assets
+        self.user_chars_dir = None
+        if user_data_dir:
+            self.user_chars_dir = os.path.join(user_data_dir, "characters")
+            os.makedirs(self.user_chars_dir, exist_ok=True)
+            print(f"AssetManager: User characters dir set to {self.user_chars_dir}")
 
     def get_characters(self) -> List[Dict[str, str]]:
         """
-        Scans the characters directory.
-        Each subdirectory is considered a character.
-        Returns a list of character info.
+        Scans both internal and user characters directories.
         """
-        chars = []
-        if not os.path.exists(self.characters_dir):
-            print(f"AssetManager: Characters dir not found at {self.characters_dir}")
-            return chars
+        chars_map = {} # Use dict to dedupe by ID
+        
+        # Scan Internal
+        self._scan_dir(self.internal_chars_dir, chars_map, "internal")
+        
+        # Scan User
+        if self.user_chars_dir:
+            self._scan_dir(self.user_chars_dir, chars_map, "user")
+            
+        self.character_paths = {k: v["path"] for k, v in chars_map.items()}
+        return list(chars_map.values())
 
-        print(f"AssetManager: Scanning {self.characters_dir}")
-        for item in os.listdir(self.characters_dir):
-            path = os.path.join(self.characters_dir, item)
+    def _scan_dir(self, directory: str, result_map: Dict[str, Any], source_type: str):
+        if not os.path.exists(directory):
+            return
+
+        print(f"AssetManager: Scanning {directory}")
+        for item in os.listdir(directory):
+            path = os.path.join(directory, item)
             if os.path.isdir(path):
-                # Check for a preview image or just use folder name
-                # For now simple ID and Name based on folder
-                chars.append({
-                    "id": item,
-                    "name": item.capitalize(),
-                    "path": path
-                })
-        return chars
+                # ID is folder name
+                char_id = item
+                if char_id not in result_map:
+                    result_map[char_id] = {
+                        "id": char_id,
+                        "name": item.capitalize(),
+                        "path": path,
+                        "source": source_type
+                    }
 
     def get_character_images(self, char_id: str) -> List[str]:
         """Returns list of image filenames for a character."""
-        char_path = os.path.join(self.characters_dir, char_id)
-        if not os.path.exists(char_path):
+        # Resolve path from cached map or check both
+        char_path = self.character_paths.get(char_id)
+        
+        if not char_path:
+            # Fallback check
+            p1 = os.path.join(self.internal_chars_dir, char_id)
+            if os.path.exists(p1):
+                 char_path = p1
+            elif self.user_chars_dir:
+                p2 = os.path.join(self.user_chars_dir, char_id)
+                if os.path.exists(p2):
+                    char_path = p2
+        
+        if not char_path or not os.path.exists(char_path):
             return []
         
         images = []

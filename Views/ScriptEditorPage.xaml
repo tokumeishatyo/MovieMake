@@ -28,6 +28,7 @@
             <TextBlock Text="Script Editor" Style="{StaticResource TitleTextBlockStyle}" VerticalAlignment="Center"/>
             <Button Command="{Binding LoadScriptCommand}" Content="Load"/>
             <Button Command="{Binding SaveScriptCommand}" Content="Save"/>
+            <Button Command="{Binding ImportCharacterCommand}" Content="Import Char"/>
             <TextBlock Text="{Binding StatusMessage}" VerticalAlignment="Center" Margin="10,0,0,0" Foreground="Gray"/>
         </StackPanel>
 

@@ -43,5 +43,21 @@ namespace MovieMake.Services
 
             return await picker.PickSingleFileAsync();
         }
+
+        public async Task<StorageFolder?> PickSingleFolderAsync()
+        {
+            var window = App.MainWindow;
+            if (window == null) return null;
+
+            var picker = new FolderPicker();
+            
+            var hwnd = WindowNative.GetWindowHandle(window);
+            InitializeWithWindow.Initialize(picker, hwnd);
+
+            picker.SuggestedStartLocation = PickerLocationId.ComputerFolder;
+            picker.FileTypeFilter.Add("*");
+
+            return await picker.PickSingleFolderAsync();
+        }
     }
 }

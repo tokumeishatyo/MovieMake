@@ -28,14 +28,18 @@ from services.tts_service import TTSService
 from services.video_generator import VideoGenerator
 
 # Initialize Services
-asset_manager = AssetManager()
+user_data_dir = os.environ.get("USER_DATA_DIR")
+asset_manager = AssetManager(user_data_dir=user_data_dir)
 tts_service = TTSService()
 video_generator = VideoGenerator(tts_service, asset_manager)
 
 # Mount static files
-app.mount("/static/assets", StaticFiles(directory=asset_manager.assets_dir), name="assets")
+app.mount("/static/assets", StaticFiles(directory=asset_manager.internal_assets_dir), name="assets")
 app.mount("/static/audio", StaticFiles(directory=tts_service.output_dir), name="audio")
 app.mount("/static/output", StaticFiles(directory=video_generator.output_dir), name="output")
+
+if asset_manager.user_chars_dir and os.path.exists(asset_manager.user_chars_dir):
+    app.mount("/static/user_assets", StaticFiles(directory=asset_manager.user_chars_dir), name="user_assets")
 
 # ... existing health/api-key ...
 

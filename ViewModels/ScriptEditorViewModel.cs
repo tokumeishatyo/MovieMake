@@ -177,5 +177,42 @@ namespace MovieMake.ViewModels
                 IsRendering = false;
             }
         }
+
+        [RelayCommand]
+        private async Task ImportCharacterAsync()
+        {
+            try
+            {
+                var picker = new FilePickerService();
+                var folder = await picker.PickSingleFolderAsync();
+                
+                if (folder == null) return;
+
+                StatusMessage = "Importing character...";
+
+                // Destination: LocalFolder/characters/{FolderName}
+                var localFolder = Windows.Storage.ApplicationData.Current.LocalFolder;
+                var charsDir = await localFolder.CreateFolderAsync("characters", Windows.Storage.CreationCollisionOption.OpenIfExists);
+                var destDir = await charsDir.CreateFolderAsync(folder.Name, Windows.Storage.CreationCollisionOption.ReplaceExisting);
+
+                // Copy files
+                var files = await folder.GetFilesAsync();
+                foreach (var file in files)
+                {
+                    await file.CopyAsync(destDir, file.Name, Windows.Storage.NameCollisionOption.ReplaceExisting);
+                }
+
+                StatusMessage = $"Imported '{folder.Name}'. Refreshing list...";
+                
+                // Refresh list from backend
+                await InitializeAsync();
+                
+                StatusMessage = $"Imported '{folder.Name}' successfully.";
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"Import Failed: {ex.Message}";
+            }
+        }
     }
 }

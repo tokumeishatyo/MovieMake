@@ -55,6 +55,10 @@ namespace MovieMake.Services
             
             // Pass PORT to python
             psi.EnvironmentVariables["PORT"] = _port.ToString();
+            
+            // Pass User Data Directory
+            string userDataDir = Windows.Storage.ApplicationData.Current.LocalFolder.Path;
+            psi.EnvironmentVariables["USER_DATA_DIR"] = userDataDir;
 
             try 
             {
