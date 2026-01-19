@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "MovieMake (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "MovieMake (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

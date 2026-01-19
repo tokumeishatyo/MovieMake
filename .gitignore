@@ -1,0 +1,14 @@
+# User-specific files
+docs/todo.txt
+
+# Visual Studio
+.vs/
+*.user
+
+# Build outputs
+bin/
+obj/
+
+# Claude Code local settings
+.claude/
+.mcp.json
