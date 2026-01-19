@@ -1,8 +1,8 @@
-# Phase 3 コードレビュー
+# Phase 4 コードレビュー
 
 **レビュー日**: 2026-01-19
 **レビュアー**: Claude (Reviewer)
-**対象**: Phase 3 - Pythonコアロジック - 素材管理 (Core Logic)
+**対象**: Phase 4 - 動画生成とプレビュー (Video Gen & Integration)
 
 ---
 
@@ -11,141 +11,131 @@
 ### 変更ファイル
 | ファイル | 変更内容 |
 |----------|----------|
-| `backend/main.py` | Asset API、TTS API追加、静的ファイル配信設定 |
-| `backend/requirements.txt` | gTTS依存関係追加 |
-| `Services/PythonService.cs` | TTS生成、キャラクター取得メソッド追加 |
-| `ViewModels/ScriptEditorViewModel.cs` | バックエンドからキャラクター一覧取得 |
+| `backend/main.py` | 動画レンダリングAPI追加、出力ディレクトリの静的配信 |
+| `backend/requirements.txt` | moviepy バージョン固定 |
+| `Services/PythonService.cs` | `RenderVideoAsync()` メソッド追加 |
+| `ViewModels/ScriptEditorViewModel.cs` | `RenderVideoCommand` 追加 |
+| `Views/ScriptEditorPage.xaml` | Render Video ボタン、ProgressRing 追加 |
 
 ### 新規追加ファイル
 | ファイル | 役割 |
 |----------|------|
-| `backend/services/__init__.py` | Servicesパッケージ |
-| `backend/services/asset_manager.py` | キャラクターアセット管理 |
-| `backend/services/tts_service.py` | 音声合成サービス（gTTS） |
-| `backend/assets/characters/zundamon/info.json` | サンプルキャラクター設定 |
+| `backend/services/video_generator.py` | MoviePyによる動画生成ロジック |
 
 ---
 
-## 2. Phase 3 要件との整合性チェック
+## 2. Phase 4 要件との整合性チェック
 
 | 要件 | 状態 | 確認内容 |
 |------|------|----------|
-| 画像ディレクトリ構造の整備 | ✅ 完了 | `backend/assets/characters/` 構造 |
-| キャラクター一覧API | ✅ 完了 | `GET /assets/characters` |
-| キャラクター画像一覧API | ✅ 完了 | `GET /assets/characters/{id}/images` |
-| TTSインターフェース定義 | ✅ 完了 | `TTSService` クラス |
-| Google TTS実装 | ✅ 完了 | gTTS ライブラリ使用 |
-| TTS API実装 | ✅ 完了 | `POST /tts/generate` |
-| C#側からのキャラクター取得 | ✅ 完了 | `GetCharactersJsonAsync()` |
-| C#側からのTTS呼び出し | ✅ 完了 | `GenerateTtsAsync()` |
+| VideoService の実装 | ✅ 完了 | `video_generator.py` - VideoGenerator クラス |
+| 画像・音声の合成処理 | ✅ 完了 | ImageClip + AudioFileClip + concatenate |
+| 字幕(Srt)生成 | ⚠️ 未実装 | 字幕機能は含まれていない |
+| SSE進捗通知エンドポイント | ❌ 未実装 | SSEエンドポイントなし |
+| MoviePyコールバックフック | ❌ 未実装 | 進捗コールバックなし |
+| WinUI側SSE受信 | ❌ 未実装 | SSE受信ロジックなし |
+| プレビューボタン | ⚠️ 未実装 | 静止画/音声確認機能なし |
+| エクスポートボタン | ✅ 完了 | Render Video ボタン |
+| ProgressRing表示 | ✅ 完了 | IsRendering 状態で表示 |
 
-**Phase 3 要件達成率: 100%**
+**Phase 4 要件達成率: 約60%**
 
 ---
 
-## 3. コード品質レビュー
+## 3. 未実装項目の詳細
 
-### 3.1. backend/services/asset_manager.py
+### 3.1. SSE進捗通知（重要度: 中）
+
+**計画書の記載**:
+> - FastAPI側へのSSEエンドポイント追加
+> - MoviePyのコールバックフック、SSEへのプログレス送信
+> - WinUI側でのSSE受信・プログレスバー表示
+
+**現状**:
+- ProgressRing は `IsRendering` フラグで表示/非表示を制御
+- 実際の進捗（0%〜100%）は取得・表示していない
+- 動画生成中は「Rendering video... This may take a while.」のメッセージのみ
+
+**影響**:
+- 長時間の動画生成時にユーザーが進捗を把握できない
+- ただし、動画生成自体は正常に動作する
+
+### 3.2. プレビュー機能（重要度: 低）
+
+**計画書の記載**:
+> - プレビューボタン(静止画/音声確認)
+
+**現状**:
+- プレビューボタンは実装されていない
+- 動画生成前の確認手段がない
+
+### 3.3. 字幕生成（重要度: 低）
+
+**計画書の記載**:
+> - 字幕(Srt生成)の合成処理
+
+**現状**:
+- 字幕機能は実装されていない
+- 動画には音声のみ（字幕なし）
+
+---
+
+## 4. 実装済み機能のコード品質レビュー
+
+### 4.1. backend/services/video_generator.py
 
 **良い点**:
-- ディレクトリの存在チェックと自動作成
-- 複数の起動パスに対応（`backend/assets` または `assets`）
-- 画像拡張子のフィルタリング（`.png`, `.jpg`, `.jpeg`, `.webp`）
+- TTSService と AssetManager を適切にDI
+- UUID でユニークな出力ファイル名
+- キャラクター画像がない場合のフォールバック（黒画面）
+- 空スクリプト時のバリデーション
 
 **コード例**:
 ```python
-def get_characters(self) -> List[Dict[str, str]]:
-    chars = []
-    for item in os.listdir(self.characters_dir):
-        path = os.path.join(self.characters_dir, item)
-        if os.path.isdir(path):
-            chars.append({
-                "id": item,
-                "name": item.capitalize(),
-                "path": path
-            })
-    return chars
+def generate_video(self, script: Dict[str, Any]) -> str:
+    clips = []
+    for line in lines:
+        # 1. Generate Audio
+        audio_path = self.tts_service.generate_audio_file(text)
+        audio_clip = AudioFileClip(audio_path)
+
+        # 2. Get Character Image
+        # ... (画像取得ロジック)
+
+        video_clip = video_clip.set_audio(audio_clip)
+        clips.append(video_clip)
+
+    final_clip = concatenate_videoclips(clips, method="compose")
+    final_clip.write_videofile(output_path, codec="libx264", audio_codec="aac", fps=24)
 ```
 
-### 3.2. backend/services/tts_service.py
+**注意点**:
+- `Line 67`: ColorClip のインポートが関数内にある（問題なし、遅延インポート）
+- 動画コーデック `libx264` と音声コーデック `aac` は適切
+
+### 4.2. Services/PythonService.cs
 
 **良い点**:
-- UUID でユニークなファイル名生成（競合回避）
-- 空テキストのバリデーション
-- `cleanup_temp_files()` でリソース解放可能
-- エラーハンドリング（try-catch）
+- レンダリング用に別の HttpClient を作成（タイムアウト5分）
+- `PropertyNamingPolicy = JsonNamingPolicy.CamelCase` でJSON命名規則統一
+- 完全なURLを返却（`new Uri(tempClient.BaseAddress, relativeUrl).ToString()`）
 
 **注意点**:
-- gTTS は無料のGoogle TTSを使用（APIキー不要）
-- 将来的なVOICEVOX対応のため、インターフェース抽象化を検討（Phase 5以降）
+- 一時的な HttpClient の使用は、共有 HttpClient のタイムアウトを変更できないための回避策として適切
 
-### 3.3. backend/main.py の追加API
-
-**良い点**:
-- Pydantic `BaseModel` でリクエストバリデーション
-- 静的ファイル配信（`/static/assets`, `/static/audio`）
-- エラー時に `HTTPException` で適切なレスポンス
-
-**API一覧**:
-| エンドポイント | メソッド | 説明 |
-|---------------|---------|------|
-| `/assets/characters` | GET | キャラクター一覧取得 |
-| `/assets/characters/{id}/images` | GET | キャラクター画像一覧 |
-| `/tts/generate` | POST | 音声合成 |
-| `/static/assets/*` | GET | アセット静的配信 |
-| `/static/audio/*` | GET | 音声ファイル静的配信 |
-
-### 3.4. Services/PythonService.cs
+### 4.3. ViewModels/ScriptEditorViewModel.cs
 
 **良い点**:
-- `GenerateTtsAsync()` で音声合成API呼び出し
-- `GetCharactersJsonAsync()` でキャラクター取得
-- JSON パース に `JsonDocument` を使用
+- `IsRendering` フラグでUI状態管理
+- エラーハンドリング（try-catch-finally）
+- レンダリング完了後にブラウザで自動再生
 
-### 3.5. ViewModels/ScriptEditorViewModel.cs
+### 4.4. Views/ScriptEditorPage.xaml
 
 **良い点**:
-- バックエンドからキャラクター一覧を動的取得
-- ダミーキャラクターのハードコードを削除
-- エラー時のフォールバック（Fallbackキャラクター）
-- `PropertyNameCaseInsensitive = true` でJSONマッピング柔軟性
-
-**注意点**:
-- `_ = InitializeAsync()` - Fire-and-forget パターン。例外は内部でキャッチされているため許容。
-
----
-
-## 4. アーキテクチャ評価
-
-### 4.1. サービス分離
-
-| レイヤー | 責務 |
-|----------|------|
-| `main.py` | APIルーティング |
-| `AssetManager` | ファイルシステム操作 |
-| `TTSService` | 音声合成ロジック |
-
-**評価**: 責務が適切に分離されており、テストしやすい構造
-
-### 4.2. 将来のTTS拡張性
-
-現在の `TTSService` はgTTSに特化していますが、将来的にVOICEVOX等に対応する場合：
-
-```python
-# 将来的な抽象化例
-class ITTSService(ABC):
-    @abstractmethod
-    def generate_audio_file(self, text: str, lang: str) -> str:
-        pass
-
-class GoogleTTSService(ITTSService):
-    ...
-
-class VoicevoxTTSService(ITTSService):
-    ...
-```
-
-**現時点の判断**: Phase 3 では具体的な実装で問題なし。Phase 5 で必要に応じて抽象化。
+- AccentButtonStyle でRender Videoボタンを目立たせる
+- IsRendering 中はボタンを無効化
+- ProgressRing でローディング表示
 
 ---
 
@@ -154,29 +144,34 @@ class VoicevoxTTSService(ITTSService):
 | 要件 | 状態 | 確認内容 |
 |------|------|----------|
 | APIキーのメモリ保持のみ | ✅ OK | 変更なし、維持 |
-| TTS APIでのAPIキー使用 | ✅ OK | gTTSは無料API、APIキー不要 |
-| ファイルパス漏洩 | ✅ OK | 相対URL `/static/audio/` で返却 |
-
-**補足**: gTTSはGoogleの無料Text-to-Speech APIを使用しており、APIキーは不要です。将来的に有料APIに切り替える場合は、セキュリティ要件に従いAPIキーをインメモリで管理する必要があります。
+| 出力ファイルの配置 | ✅ OK | `/static/output/` で適切に配信 |
 
 ---
 
-## 6. 問題点と改善提案
+## 6. 問題点と判断
 
-### 6.1. 軽微な問題（今後のフェーズで対応可）
+### 6.1. 未実装項目についてCEOへの確認事項
+
+以下の項目が実装計画書の要件に含まれていましたが、未実装です：
+
+| 項目 | 重要度 | 質問 |
+|------|--------|------|
+| SSE進捗通知 | 中 | Phase 5で対応？または今回必須？ |
+| プレビュー機能 | 低 | Phase 5で対応？または省略？ |
+| 字幕生成 | 低 | Phase 5で対応？または省略？ |
+
+**レビュアーの見解**:
+- 動画生成の基本機能は動作しており、MVP（最小限の実用製品）としては問題なし
+- SSE進捗通知は「Nice to have」として Phase 5 で対応可能
+- CEOの判断により、現状で承認またはSSE実装を追加要求
+
+### 6.2. 軽微な問題（今後対応可）
 
 | # | 問題 | 影響度 | 提案 |
 |---|------|--------|------|
-| 1 | TTSServiceの抽象化未実施 | 低 | Phase 5でVOICEVOX対応時に検討 |
-| 2 | info.jsonが未使用 | 低 | Phase 4で活用予定 |
-| 3 | 一時音声ファイルの自動クリーンアップ未実装 | 低 | アプリ終了時に `cleanup_temp_files()` 呼び出しを検討 |
-
-### 6.2. 対応不要（確認済み）
-
-| 項目 | 理由 |
-|------|------|
-| `__pycache__` ディレクトリ | .gitignoreに追加推奨（軽微） |
-| Fire-and-forget初期化 | 例外ハンドリング済み |
+| 1 | 進捗表示が0-100%ではない | 低 | Phase 5で対応 |
+| 2 | 一時ファイルのクリーンアップ | 低 | Phase 5で対応 |
+| 3 | 動画コーデックのハードコード | 低 | 設定画面で選択可能にする（将来） |
 
 ---
 
@@ -184,17 +179,27 @@ class VoicevoxTTSService(ITTSService):
 
 | 項目 | 判定 |
 |------|------|
-| Phase 3 要件達成 | **完了** |
+| 動画生成の基本機能 | **完了** |
+| UI結合（エクスポートボタン） | **完了** |
+| SSE進捗通知 | **未実装** |
+| プレビュー機能 | **未実装** |
 | コード品質 | **良好** |
-| サービス分離 | **適切** |
 | セキュリティ要件 | **維持** |
-| 致命的な問題 | **なし** |
 
 ## 結論
 
-**Phase 3 の実装を承認いたします。**
+**Phase 4 の実装を条件付きで承認いたします。**
 
-キャラクターアセット管理とTTS基盤が適切に実装されており、バックエンドとフロントエンドの連携も正しく動作しています。Phase 4（動画生成）への移行に問題はありません。
+動画生成の基本機能（画像+音声→MP4出力）は正常に動作しており、MVPとしては十分です。
+
+ただし、以下の項目が実装計画書の要件に含まれていましたが未実装です：
+- SSE進捗通知
+- プレビュー機能
+- 字幕生成
+
+**CEOの判断を求めます**：
+1. **現状で承認** → Phase 5（検証と仕上げ）で上記を対応
+2. **SSE実装を追加要求** → Phase 4 の追加作業として実装
 
 ---
 

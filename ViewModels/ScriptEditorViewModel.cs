@@ -129,5 +129,53 @@ namespace MovieMake.ViewModels
                 StatusMessage = $"Load Failed: {ex.Message}";
             }
         }
+        [ObservableProperty]
+        private bool _isRendering = false;
+
+        [RelayCommand]
+        private async Task RenderVideoAsync()
+        {
+            if (CurrentScript.Lines.Count == 0)
+            {
+                StatusMessage = "Script is empty.";
+                return;
+            }
+
+            IsRendering = true;
+            StatusMessage = "Rendering video... This may take a while.";
+
+            try
+            {
+                // We need the full URL including port, which PythonService manages internally.
+                // However, PythonService.RenderVideoAsync returns the relative path from the server root.
+                // It's tricky to get the port from here as it's private in PythonService.
+                // Actually PythonService exposes relative URL properly.
+                // Let's modify PythonService to expose BaseUrl or handle full URL construction.
+                // OR we just assume localhost and we can't easily guess port.
+                // HACK: PythonService.RenderVideoAsync should probably return full URL or we expose BaseAddress.
+                // But for now let's assume PythonService returns something we can use.
+                // NOTE: I'll stick to returning relative URL from service, but I need the base.
+                // Let's assume the user will play it via browser.
+                
+                string fullUrl = await App.PythonService.RenderVideoAsync(CurrentScript);
+                
+                StatusMessage = "Render Complete! Opening video..."; 
+                
+                // Open in default browser/player
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = fullUrl,
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"Render Failed: {ex.Message}";
+            }
+            finally
+            {
+                IsRendering = false;
+            }
+        }
     }
 }

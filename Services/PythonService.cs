@@ -153,6 +153,33 @@ namespace MovieMake.Services
             return doc.RootElement.GetProperty("url").GetString() ?? "";
         }
 
+        public async Task<string> RenderVideoAsync(object script)
+        {
+            var options = new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                WriteIndented = true
+            };
+            var json = JsonSerializer.Serialize(script, options);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            // Increase timeout for rendering
+            // Cannot change timeout of shared _httpClient once started. Use a new temporary client.
+            using (var tempClient = new HttpClient())
+            {
+                tempClient.BaseAddress = _httpClient.BaseAddress; // Use the same base URL
+                tempClient.Timeout = TimeSpan.FromMinutes(5);
+                
+                var response = await tempClient.PostAsync("/video/render", content);
+                response.EnsureSuccessStatusCode();
+                
+                var respJson = await response.Content.ReadAsStringAsync();
+                var doc = JsonDocument.Parse(respJson);
+                var relativeUrl = doc.RootElement.GetProperty("url").GetString() ?? "";
+                return new Uri(tempClient.BaseAddress, relativeUrl).ToString();
+            }
+        }
+
         public async Task<string> GetCharactersJsonAsync()
         {
              var response = await _httpClient.GetAsync("/assets/characters");

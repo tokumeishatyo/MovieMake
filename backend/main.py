@@ -25,13 +25,36 @@ from pydantic import BaseModel
 from services.asset_manager import AssetManager
 from services.tts_service import TTSService
 
+from services.video_generator import VideoGenerator
+
 # Initialize Services
 asset_manager = AssetManager()
 tts_service = TTSService()
+video_generator = VideoGenerator(tts_service, asset_manager)
 
 # Mount static files
 app.mount("/static/assets", StaticFiles(directory=asset_manager.assets_dir), name="assets")
 app.mount("/static/audio", StaticFiles(directory=tts_service.output_dir), name="audio")
+app.mount("/static/output", StaticFiles(directory=video_generator.output_dir), name="output")
+
+# ... existing health/api-key ...
+
+# Video API
+@app.post("/video/render")
+async def render_video(request: Request):
+    try:
+        script = await request.json()
+        print("Starting video render...")
+        output_path = video_generator.generate_video(script)
+        
+        filename = os.path.basename(output_path)
+        url = f"/static/output/{filename}"
+        print(f"Video rendered to: {output_path}")
+        return {"url": url, "path": output_path}
+    except Exception as e:
+        print(f"Render Error: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/health")
 async def health_check():
