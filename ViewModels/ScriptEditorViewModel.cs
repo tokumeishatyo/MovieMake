@@ -23,13 +23,35 @@ namespace MovieMake.ViewModels
             _scriptManager = new ScriptManager();
             CurrentScript = new Script();
             
-            // Add dummy characters for now (TODO: Load from backend or config)
-            AvailableCharacters.Add(new Character { Name = "Reimu", Id = "reimu" });
-            AvailableCharacters.Add(new Character { Name = "Marisa", Id = "marisa" });
-            AvailableCharacters.Add(new Character { Name = "Zundamon", Id = "zundamon" });
+            _ = InitializeAsync(); // Fire and forget load
+        }
 
-            // Initialize with one line
-            AddLine();
+        public async Task InitializeAsync()
+        {
+             try 
+             {
+                 var json = await App.PythonService.GetCharactersJsonAsync();
+                 var chars = System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.List<Character>>(json, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                 
+                 AvailableCharacters.Clear();
+                 if (chars != null)
+                 {
+                     foreach (var c in chars)
+                     {
+                         // Basic mapping if backend diffs from frontend model
+                         AvailableCharacters.Add(c);
+                     }
+                 }
+                 
+                 if (CurrentScript.Lines.Count == 0) AddLine(); 
+             }
+             catch (Exception ex)
+             {
+                 StatusMessage = $"Failed to load characters: {ex.Message}";
+                 // Fallback dummy
+                 AvailableCharacters.Add(new Character { Name = "Fallback", Id = "fallback" });
+                 if (CurrentScript.Lines.Count == 0) AddLine();
+             }
         }
 
         [RelayCommand]

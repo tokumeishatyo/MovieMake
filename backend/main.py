@@ -20,6 +20,19 @@ app.add_middleware(
 # using Optional for compatibility with python < 3.10
 _api_key: Optional[str] = None
 
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+from services.asset_manager import AssetManager
+from services.tts_service import TTSService
+
+# Initialize Services
+asset_manager = AssetManager()
+tts_service = TTSService()
+
+# Mount static files
+app.mount("/static/assets", StaticFiles(directory=asset_manager.assets_dir), name="assets")
+app.mount("/static/audio", StaticFiles(directory=tts_service.output_dir), name="audio")
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint for WinUI to verify connection."""
@@ -47,6 +60,31 @@ async def set_api_key(request: Request):
     except Exception as e:
         print(f"ERROR in set_api_key: {e}")
         traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Asset APIs
+@app.get("/assets/characters")
+async def get_characters():
+    return asset_manager.get_characters()
+
+@app.get("/assets/characters/{char_id}/images")
+async def get_character_images(char_id: str):
+    return asset_manager.get_character_images(char_id)
+
+# TTS API
+class TTSRequest(BaseModel):
+    text: str
+    lang: str = "ja"
+
+@app.post("/tts/generate")
+async def generate_tts(req: TTSRequest):
+    try:
+        path = tts_service.generate_audio_file(req.text, req.lang)
+        # Return URL relative to static mount
+        filename = os.path.basename(path)
+        url = f"/static/audio/{filename}"
+        return {"url": url, "path": path}
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/")

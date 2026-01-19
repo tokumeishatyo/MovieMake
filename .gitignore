@@ -12,3 +12,8 @@ obj/
 # Claude Code local settings
 .claude/
 .mcp.json
+
+# Python
+__pycache__/
+*.pyc
+backend/temp_audio/

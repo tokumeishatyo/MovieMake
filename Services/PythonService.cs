@@ -138,6 +138,28 @@ namespace MovieMake.Services
             }
         }
 
+        public async Task<string> GenerateTtsAsync(string text, string lang = "ja")
+        {
+            var payload = new { text = text, lang = lang };
+            var json = JsonSerializer.Serialize(payload);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var response = await _httpClient.PostAsync("/tts/generate", content);
+            response.EnsureSuccessStatusCode();
+            
+            var respJson = await response.Content.ReadAsStringAsync();
+            var doc = JsonDocument.Parse(respJson);
+            // Returns the server-relative URL (e.g., /static/audio/uuid.mp3)
+            return doc.RootElement.GetProperty("url").GetString() ?? "";
+        }
+
+        public async Task<string> GetCharactersJsonAsync()
+        {
+             var response = await _httpClient.GetAsync("/assets/characters");
+             response.EnsureSuccessStatusCode();
+             return await response.Content.ReadAsStringAsync();
+        }
+
         public void StopBackend()
         {
             try
